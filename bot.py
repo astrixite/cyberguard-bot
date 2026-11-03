@@ -1,7 +1,5 @@
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
-import json
 import random
 import re
 import string
@@ -63,17 +61,6 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-
-
-def run_web_server():
-    port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
-    print(f"Web server started on port {port}")
-    server.serve_forever()
-
-
-# Запускаем веб-сервер в фоновом потоке
-threading.Thread(target=run_web_server, daemon=True).start()
 
 
 # ========== МЕНЮ КИБЕРГУРД (Инлайн) ==========
@@ -467,7 +454,7 @@ def simulate_crack_time_local(chat_id, password):
     bot.send_message(chat_id, f'⏳ **Результаты симулятора взлома:**\n\nВремя подбора брутфорс-ботом: **{time_str}**', parse_mode='Markdown')
 
 
-# Установка вебхука при старте приложения
+# Регистрация вебхука при старте
 RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
 if RENDER_URL:
     webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
@@ -478,3 +465,10 @@ else:
     print("WARNING: RENDER_EXTERNAL_URL not found.")
 
 print('Умный бот CyberGuard успешно запущен на вебхуках!')
+
+# ЗАПУСК ВЕБ-СЕРВЕРА НА ОСНОВНОМ ПОТОКЕ (предотвращает ранний выход приложения)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    print(f"Web server started on port {port}")
+    server.serve_forever()
