@@ -8,9 +8,8 @@ import ipaddress
 from urllib.parse import urlsplit
 import telebot
 from telebot import types
-from telebot.handler_backends import ContinueHandling
 
-# Мини-сервер с поддержкой метода HEAD для Render
+# Единый мини-сервер с поддержкой GET и HEAD для Render
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -18,22 +17,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Bot is alive!")
 
     def do_HEAD(self):
-        # Render использует HEAD-запросы для проверки здоровья сервиса
         self.do_GET()
-
-def run_web_server():
-    port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
-    server.serve_forever()
-
-# Запускаем веб-сервер в фоновом потоке
-threading.Thread(target=run_web_server, daemon=True).start()
-# Мини-сервер для того, чтобы Render не зависал и считал сервис живым
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is alive!")
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -51,7 +35,7 @@ bot = telebot.TeleBot(TOKEN)
 user_states = {}
 user_scores = {}
 
-# Большой черный список популярных и уязвимых паролей (для умного симулятора)
+# Большой черный список популярных и уязвимых паролей
 COMMON_PASSWORDS = {
     '123456', 'password', '123456789', 'qwerty', '12345678',
     '12345', '1234', '111111', '1234567', 'dragon',
@@ -63,46 +47,32 @@ COMMON_PASSWORDS = {
 }
 
 
-# ========== МЕНЮ КИБЕРГУРД ==========
+# ========== МЕНЮ КИБЕРГУРД (Инлайн) ==========
 
 def cg_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎣 Детектор фишинга", callback_data="cg:phishing")],
-        [InlineKeyboardButton("🧠 Киберквиз", callback_data="cg:quiz")],
-        [InlineKeyboardButton("🚨 Помощь при взломе", callback_data="cg:help")],
-        [InlineKeyboardButton("🔗 Проверка ссылок", callback_data="cg:link")],
-        [InlineKeyboardButton("📊 Рейтинг безопасности", callback_data="cg:audit")],
-        [InlineKeyboardButton("🔑 Генератор паролей", callback_data="cg:pass_gen")],
-        [InlineKeyboardButton("⏳ Симулятор взлома", callback_data="cg:crack_sim")],
-        [InlineKeyboardButton("📖 Словарь киберугроз", callback_data="cg:dict")],
-        [InlineKeyboardButton("💡 Советы", callback_data="cg:tips")],
+    return types.InlineKeyboardMarkup([
+        [types.InlineKeyboardButton("🎣 Детектор фишинга", callback_data="cg:phishing")],
+        [types.InlineKeyboardButton("🧠 Киберквиз", callback_data="cg:quiz")],
+        [types.InlineKeyboardButton("🚨 Помощь при взломе", callback_data="cg:help")],
+        [types.InlineKeyboardButton("🔗 Проверка ссылок", callback_data="cg:link")],
+        [types.InlineKeyboardButton("📊 Рейтинг безопасности", callback_data="cg:audit")],
+        [types.InlineKeyboardButton("🔑 Генератор паролей", callback_data="cg:pass_gen")],
+        [types.InlineKeyboardButton("⏳ Симулятор взлома", callback_data="cg:crack_sim")],
+        [types.InlineKeyboardButton("📖 Словарь киберугроз", callback_data="cg:dict")],
+        [types.InlineKeyboardButton("💡 Советы", callback_data="cg:tips")],
     ])
-
-def InlineKeyboardMarkup(rows):
-    return types.InlineKeyboardMarkup(rows)
 
 def cg_back():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Назад в меню", callback_data="cg:menu")]
+    return types.InlineKeyboardMarkup([
+        [types.InlineKeyboardButton("⬅️ Назад в меню", callback_data="cg:menu")]
     ])
-
-
-async def cg_menu_handler_func(call_or_message, context):
-    context.user_data.pop("cg_mode", None)
-    text = "🛡️ CyberGuard Bot\n\nВыбери инструмент безопасности:"
-    if hasattr(call_or_message, 'callback_query') and call_or_message.callback_query:
-        await call_or_message.callback_query.edit_message_text(text, reply_markup=cg_keyboard())
-    elif hasattr(call_or_message, 'edit_message_text'):
-        await call_or_message.edit_message_text(text, reply_markup=cg_keyboard())
-    else:
-        await call_or_message.reply_text(text, reply_markup=cg_keyboard())
 
 
 # Обработка команды /start
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_scores[message.chat.id] = 0
-    user_states[message.chat.id] = None
+    user_states[message.chat.id] = {}
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn_menu = types.KeyboardButton('🛡️ Меню CyberGuard')
@@ -117,7 +87,7 @@ def send_welcome(message):
     welcome_text = (
         f'Привет, {message.from_user.first_name}! 👋\n'
         'Я **CyberGuard** — твой продвинутый помощник по кибербезопасности.\n'
-        'Выбери нужную функцию в меню или воспользуйся кнопкой ниже:'
+        'Выбери нужную функцию в меню ниже:'
     )
     bot.send_message(message.chat.id, welcome_text, parse_mode='Markdown', reply_markup=markup)
 
@@ -174,13 +144,15 @@ CG_QUIZ = [
     ("Что делать при подозрении на взлом?", ["Ничего", "Сменить пароль и завершить чужие сеансы", "Удалить все приложения"], 1, "Нужно восстановить контроль и защитить аккаунт."),
 ]
 
-def cg_show_quiz_sync(query, context, feedback=""):
-    index = context.user_data.get("cg_quiz_index", 0)
+def cg_show_quiz_sync(message, context, feedback=""):
+    index = context.get("cg_quiz_index", 0)
     if index >= len(CG_QUIZ):
-        score = context.user_data.get("cg_quiz_score", 0)
-        query.edit_message_text(
+        score = context.get("cg_quiz_score", 0)
+        bot.edit_message_text(
             f"🏆 Квиз завершён!\n\nТвой результат: {score}/{len(CG_QUIZ)}\n\n"
             f"{'Отлично!' if score == len(CG_QUIZ) else 'Продолжай изучать кибербезопасность!'}",
+            chat_id=message.chat.id,
+            message_id=message.message_id,
             reply_markup=cg_back()
         )
         return
@@ -188,7 +160,7 @@ def cg_show_quiz_sync(query, context, feedback=""):
     question, options, _, _ = CG_QUIZ[index]
     keyboard = [[types.InlineKeyboardButton(opt, callback_data=f"cg:q:{i}")] for i, opt in enumerate(options)]
     text = f"{feedback}🧠 Вопрос {index + 1}/{len(CG_QUIZ)}\n\n{question}"
-    query.edit_message_text(text, reply_markup=types.InlineKeyboardMarkup(keyboard))
+    bot.edit_message_text(text, chat_id=message.chat.id, message_id=message.message_id, reply_markup=types.InlineKeyboardMarkup(keyboard))
 
 
 # ========== 3. ПОМОЩЬ ПРИ ВЗЛОМЕ ==========
@@ -268,15 +240,17 @@ CG_AUDIT = [
     "Есть ли резервные копии важных данных?",
 ]
 
-def cg_show_audit_sync(query, context):
-    index = context.user_data.get("cg_audit_index", 0)
+def cg_show_audit_sync(message, context):
+    index = context.get("cg_audit_index", 0)
     if index >= len(CG_AUDIT):
-        score = context.user_data.get("cg_audit_score", 0) * 20
+        score = context.get("cg_audit_score", 0) * 20
         if score >= 80: level = "🟢 Хорошие привычки безопасности"
         elif score >= 60: level = "🟡 Есть что улучшить"
         else: level = "🔴 Стоит усилить защиту"
-        query.edit_message_text(
+        bot.edit_message_text(
             f"📊 Рейтинг безопасности\n\nРезультат: {score}/100\n{level}\n\nЭто учебный показатель.",
+            chat_id=message.chat.id,
+            message_id=message.message_id,
             reply_markup=cg_back()
         )
         return
@@ -287,61 +261,48 @@ def cg_show_audit_sync(query, context):
             types.InlineKeyboardButton("❌ Нет", callback_data="cg:a:no")
         ]
     ])
-    query.edit_message_text(f"📊 Вопрос {index + 1}/{len(CG_AUDIT)}\n\n{CG_AUDIT[index]}", reply_markup=keyboard)
+    bot.edit_message_text(f"📊 Вопрос {index + 1}/{len(CG_AUDIT)}\n\n{CG_AUDIT[index]}", chat_id=message.chat.id, message_id=message.message_id, reply_markup=keyboard)
 
 
-# ========== ОБРАБОТКА КНОПОК И КОМАНД CYBERGUARD ==========
+# ========== ОБРАБОТКА ИНЛАЙН-КНОПОК (CALLBACK) ==========
 
 @bot.callback_query_handler(func=lambda call: call.data and call.data.startswith("cg:"))
 def cg_callback(call):
-    query = call
-    bot.answer_callback_query(query.id)
-    data = query.data
-    context_data = bot.user_data.setdefault(query.message.chat.id, {}) if hasattr(bot, 'user_data') else {}
-    # Используем простую имитацию context.user_data через глобальный словарь для совместимости
-    if query.message.chat.id not in user_states:
-        user_states[query.message.chat.id] = {}
+    bot.answer_callback_query(call.id)
+    chat_id = call.message.chat.id
+    data = call.data
 
-    # Для удобства приведем к контексту словарей по chatId
-    chat_id = query.message.chat.id
-    if chat_id not in user_scores:
-        user_scores[chat_id] = 0
-
-    class DummyContext:
-        def __init__(self, cid):
-            if cid not in user_states: user_states[cid] = {}
-            self.user_data = user_states[cid]
-
-    context = DummyContext(chat_id)
+    if chat_id not in user_states:
+        user_states[chat_id] = {}
+    context = user_states[chat_id]
 
     if data == "cg:menu":
-        context.user_data.pop("cg_mode", None)
-        text = "🛡️ CyberGuard Bot\n\nВыбери инструмент безопасности:"
-        query.message.edit_text(text, reply_markup=cg_keyboard())
+        context.pop("cg_mode", None)
+        bot.edit_message_text("🛡️ CyberGuard Bot\n\nВыбери инструмент безопасности:", chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_keyboard())
 
     elif data == "cg:phishing":
-        context.user_data["cg_mode"] = "phishing"
-        query.message.edit_text("🎣 Отправь текст подозрительного сообщения.\n\nУдали личные данные перед отправкой.", reply_markup=cg_back())
+        context["cg_mode"] = "phishing"
+        bot.edit_message_text("🎣 Отправь текст подозрительного сообщения.\n\nУдали личные данные перед отправкой.", chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
 
     elif data == "cg:link":
-        context.user_data["cg_mode"] = "link"
-        query.message.edit_text("🔗 Отправь ссылку, которую хочешь проверить.", reply_markup=cg_back())
+        context["cg_mode"] = "link"
+        bot.edit_message_text("🔗 Отправь ссылку, которую хочешь проверить.", chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
 
     elif data == "cg:quiz":
-        context.user_data.pop("cg_mode", None)
-        context.user_data["cg_quiz_index"] = 0
-        context.user_data["cg_quiz_score"] = 0
-        cg_show_quiz_sync(query.message, context)
+        context.pop("cg_mode", None)
+        context["cg_quiz_index"] = 0
+        context["cg_quiz_score"] = 0
+        cg_show_quiz_sync(call.message, context)
 
     elif data.startswith("cg:q:"):
-        index = context.user_data.get("cg_quiz_index", 0)
+        index = context.get("cg_quiz_index", 0)
         answer = int(data.split(":")[-1])
         _, _, correct, explanation = CG_QUIZ[index]
         feedback = "✅ Правильно!\n" if answer == correct else "❌ Неправильно.\n"
         if answer == correct:
-            context.user_data["cg_quiz_score"] = context.user_data.get("cg_quiz_score", 0) + 1
-        context.user_data["cg_quiz_index"] = index + 1
-        cg_show_quiz_sync(query.message, context, feedback + explanation + "\n\n")
+            context["cg_quiz_score"] = context.get("cg_quiz_score", 0) + 1
+        context["cg_quiz_index"] = index + 1
+        cg_show_quiz_sync(call.message, context, feedback + explanation + "\n\n")
 
     elif data == "cg:help":
         keyboard = types.InlineKeyboardMarkup([
@@ -351,34 +312,34 @@ def cg_callback(call):
             [types.InlineKeyboardButton("Подозрительная ссылка", callback_data="cg:h:link")],
             [types.InlineKeyboardButton("⬅️ Назад", callback_data="cg:menu")]
         ])
-        query.message.edit_text("🚨 Выбери проблему:", reply_markup=keyboard)
+        bot.edit_message_text("🚨 Выбери проблему:", chat_id=chat_id, message_id=call.message.message_id, reply_markup=keyboard)
 
     elif data.startswith("cg:h:"):
         service = data.split(":")[-1]
-        query.message.edit_text(CG_RECOVERY.get(service, "Сценарий не найден."), reply_markup=cg_back())
+        bot.edit_message_text(CG_RECOVERY.get(service, "Сценарий не найден."), chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
 
     elif data == "cg:audit":
-        context.user_data.pop("cg_mode", None)
-        context.user_data["cg_audit_index"] = 0
-        context.user_data["cg_audit_score"] = 0
-        cg_show_audit_sync(query.message, context)
+        context.pop("cg_mode", None)
+        context["cg_audit_index"] = 0
+        context["cg_audit_score"] = 0
+        cg_show_audit_sync(call.message, context)
 
     elif data.startswith("cg:a:"):
-        if "cg_audit_index" in context.user_data:
+        if "cg_audit_index" in context:
             if data == "cg:a:yes":
-                context.user_data["cg_audit_score"] = context.user_data.get("cg_audit_score", 0) + 1
-            context.user_data["cg_audit_index"] = context.user_data.get("cg_audit_index", 0) + 1
-            cg_show_audit_sync(query.message, context)
+                context["cg_audit_score"] = context.get("cg_audit_score", 0) + 1
+            context["cg_audit_index"] = context.get("cg_audit_index", 0) + 1
+            cg_show_audit_sync(call.message, context)
 
     elif data == "cg:pass_gen":
         chars = string.ascii_letters + string.digits + '!@#$%^&*'
         password = ''.join(random.choice(chars) for _ in range(14))
         gen_text = f'🔑 **Генератор безопасных паролей**\n\nВот надежный пароль:\n`{password}`'
-        query.message.edit_text(gen_text, parse_mode='Markdown', reply_markup=cg_back())
+        bot.edit_message_text(gen_text, chat_id=chat_id, message_id=call.message.message_id, parse_mode='Markdown', reply_markup=cg_back())
 
     elif data == "cg:crack_sim":
-        context.user_data["cg_mode"] = "waiting_for_crack_password"
-        query.message.edit_text('⏳ **Симулятор взлома**\n\nВведи пароль в чат для проверки на уязвимость:', reply_markup=cg_back())
+        context["cg_mode"] = "waiting_for_crack_password"
+        bot.edit_message_text('⏳ **Симулятор взлома**\n\nВведи пароль в чат для проверки на уязвимость:', chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
 
     elif data == "cg:dict":
         dict_text = (
@@ -388,14 +349,14 @@ def cg_callback(call):
             '3️⃣ **Вредоносное ПО** — вирусы и трояны.\n'
             '4️⃣ **Социальная инженерия** — психологический взлом.'
         )
-        query.message.edit_text(dict_text, parse_mode='Markdown', reply_markup=cg_back())
+        bot.edit_message_text(dict_text, chat_id=chat_id, message_id=call.message.message_id, parse_mode='Markdown', reply_markup=cg_back())
 
     elif data == "cg:tips":
         tips = '📌 **Советы:**\n1. Используй разные пароли.\n2. Включи 2FA.\n3. Не переходи по подозрительным ссылкам.'
-        query.message.edit_text(tips, parse_mode='Markdown', reply_markup=cg_back())
+        bot.edit_message_text(tips, chat_id=chat_id, message_id=call.message.message_id, parse_mode='Markdown', reply_markup=cg_back())
 
 
-# ========== ОБРАБОТКА ТЕКСТА И КНОПОК МЕНЮ ==========
+# ========== ОБРАБОТКА ТЕКСТА И КНОПОК НИЖНЕГО МЕНЮ ==========
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -407,37 +368,46 @@ def handle_message(message):
     
     state = user_states[chat_id].get("cg_mode")
 
+    # Вызов главного инлайн-меню через кнопку реплай-клавиатуры
     if text == "🛡️ Меню CyberGuard":
         user_states[chat_id].pop("cg_mode", None)
         bot.send_message(chat_id, "🛡️ CyberGuard Bot\n\nВыбери инструмент безопасности:", reply_markup=cg_keyboard())
         return
 
-    # Проверка симулятора взлома
+    # Проверка режима ожидания пароля (Симулятор взлома)
     if state == 'waiting_for_crack_password':
         user_states[chat_id]["cg_mode"] = None
-        # Вызываем функцию симулятора из вашего кода
         simulate_crack_time_local(chat_id, text)
         return
 
+    # Проверка режима детектора фишинга
     if state == "phishing":
         result = cg_check_phishing(text)
         user_states[chat_id].pop("cg_mode", None)
         bot.send_message(chat_id, result, reply_markup=cg_back(), parse_mode='Markdown')
         return
 
+    # Проверка режима проверки ссылок
     if state == "link":
         result = cg_check_link(text)
         user_states[chat_id].pop("cg_mode", None)
         bot.send_message(chat_id, result, reply_markup=cg_back())
         return
 
-    # Текстовые кнопки нижнего реплай-меню
+    # Обработка нажатий на нижние кнопки реплай-клавиатуры
     if text == '🔑 Генератор паролей':
         chars = string.ascii_letters + string.digits + '!@#$%^&*'
         password = ''.join(random.choice(chars) for _ in range(14))
         bot.send_message(chat_id, f'🔑 **Генератор паролей**\n\n`{password}`', parse_mode='Markdown')
     elif text == '📖 Словарь киберугроз':
-        bot.send_message(chat_id, '📖 **Словарь:** Фишинг, брутфорс, вирусы, соц. инженерия.', parse_mode='Markdown')
+        dict_text = (
+            '📖 **Словарь киберугроз:**\n\n'
+            '1️⃣ **Фишинг** — кража данных обманом.\n'
+            '2️⃣ **Брутфорс** — подбор паролей перебором.\n'
+            '3️⃣ **Вредоносное ПО** — вирусы и трояны.\n'
+            '4️⃣ **Социальная инженерия** — психологический взлом.'
+        )
+        bot.send_message(chat_id, dict_text, parse_mode='Markdown')
     elif text == '⏳ Симулятор взлома':
         user_states[chat_id]["cg_mode"] = 'waiting_for_crack_password'
         bot.send_message(chat_id, '⏳ Введи пароль для проверки времени подбора:')
@@ -445,27 +415,32 @@ def handle_message(message):
         user_scores[chat_id] = 0
         user_states[chat_id]["cg_audit_index"] = 0
         user_states[chat_id]["cg_audit_score"] = 0
-        # Отправляем первый вопрос аудита через инлайн-кнопки
         markup = types.InlineKeyboardMarkup([
             [types.InlineKeyboardButton("🟢 Да", callback_data="cg:a:yes"), types.InlineKeyboardButton("🔴 Нет", callback_data="cg:a:no")]
         ])
         bot.send_message(chat_id, f'📊 Вопрос 1/5:\n\n{CG_AUDIT[0]}', reply_markup=markup)
     elif text == '🔗 Полезные ресурсы':
-        bot.send_message(chat_id, '🔗 Ресурсы: Have I Been Pwned, Bitwarden, NIST.', disable_web_page_preview=True)
+        tools_text = (
+            '🔗 **Полезные ресурсы:**\n\n'
+            '1. **Проверка утечек:** [Have I Been Pwned](https://haveibeenpwned.com/)\n'
+            '2. **Менеджеры паролей:** [Bitwarden](https://bitwarden.com/)'
+        )
+        bot.send_message(chat_id, tools_text, parse_mode='Markdown', disable_web_page_preview=True)
     elif text == '💡 Советы':
-        bot.send_message(chat_id, '📌 Топ правила: сложные пароли, 2FA, осторожность со ссылками.')
+        tips = '📌 **Топ-3 правила цифровой гигиены:**\n\n1. Никогда не используй одинаковые пароли.\n2. Включай двухфакторную аутентификацию (2FA).\n3. Не переходи по сомнительным ссылкам.'
+        bot.send_message(chat_id, tips, parse_mode='Markdown')
 
 
 def simulate_crack_time_local(chat_id, password):
     if password in COMMON_PASSWORDS or password.lower() in COMMON_PASSWORDS:
-        bot.send_message(chat_id, '⏳ Пароль найден в базе утечек! Взломан мгновенно 🚨', parse_mode='Markdown')
+        bot.send_message(chat_id, '⏳ **Результаты симулятора взлома:**\n\n⚠️ Этот пароль найден в базе утечек! Взломан мгновенно 🚨', parse_mode='Markdown')
         return
     length = len(password)
     combinations = 70 ** length
     seconds = combinations / 10_000_000_000
     if seconds < 1: time_str = "мгновенно ⚡"
     else: time_str = f"около {round(seconds, 1)} секунд ⏱"
-    bot.send_message(chat_id, f'⏳ Время подбора: **{time_str}**', parse_mode='Markdown')
+    bot.send_message(chat_id, f'⏳ **Результаты симулятора взлома:**\n\nВремя подбора брутфорс-ботом: **{time_str}**', parse_mode='Markdown')
 
 
 # Запуск бота с защитой от обрывов связи и веб-сервером для Render
