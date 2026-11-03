@@ -10,6 +10,24 @@ import telebot
 from telebot import types
 from telebot.handler_backends import ContinueHandling
 
+# Мини-сервер с поддержкой метода HEAD для Render
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive!")
+
+    def do_HEAD(self):
+        # Render использует HEAD-запросы для проверки здоровья сервиса
+        self.do_GET()
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    server.serve_forever()
+
+# Запускаем веб-сервер в фоновом потоке
+threading.Thread(target=run_web_server, daemon=True).start()
 # Мини-сервер для того, чтобы Render не зависал и считал сервис живым
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
