@@ -1,6 +1,7 @@
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
+import json
 import random
 import re
 import string
@@ -9,27 +10,12 @@ from urllib.parse import urlsplit
 import telebot
 from telebot import types
 
-# Единый мини-сервер с поддержкой GET и HEAD для Render
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is alive!")
-
-    def do_HEAD(self):
-        self.do_GET()
-
-def run_web_server():
-    port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
-    server.serve_forever()
-
-# Запускаем веб-сервер в фоновом потоке
-threading.Thread(target=run_web_server, daemon=True).start()
-
-# Токен нашего бота
+# ТОКЕН ВАШЕГО БОТА ОТ @BotFather
 TOKEN = '8702111817:AAE3swaj7G_dPgYjgY4m52oP95AzvY1xhBQ'
 bot = telebot.TeleBot(TOKEN)
+
+# Безопасный путь для вебхука на основе токена
+WEBHOOK_PATH = f"/{TOKEN}"
 
 # Словари для отслеживания состояний пользователей
 user_states = {}
@@ -45,6 +31,49 @@ COMMON_PASSWORDS = {
     'princess', 'welcome', 'shadow', 'ashley', 'michael',
     'superman', '000000', 'abc123', 'pass123',
 }
+
+
+# Мини-сервер для обработки вебхуков от Telegram и пингов от Render
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive and running on Webhooks!")
+
+    def do_HEAD(self):
+        self.do_GET()
+
+    def do_POST(self):
+        if self.path == WEBHOOK_PATH:
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                json_string = post_data.decode('utf-8')
+                
+                # Передаем обновление боту
+                update = telebot.types.Update.de_json(json_string)
+                bot.process_new_updates([update])
+                
+                self.send_response(200)
+                self.end_headers()
+            except Exception as e:
+                print(f"Error processing update: {e}")
+                self.send_response(500)
+                self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    print(f"Web server started on port {port}")
+    server.serve_forever()
+
+
+# Запускаем веб-сервер в фоновом потоке
+threading.Thread(target=run_web_server, daemon=True).start()
 
 
 # ========== МЕНЮ КИБЕРГУРД (Инлайн) ==========
@@ -353,7 +382,7 @@ def cg_callback(call):
 
     elif data == "cg:tips":
         tips = '📌 **Советы:**\n1. Используй разные пароли.\n2. Включи 2FA.\n3. Не переходи по подозрительным ссылкам.'
-        bot.edit_message_text(tips, chat_id=chat_id, message_id=call.message.message_id, parse_mode='Markdown', reply_markup=cg_back())
+        bot.edit_message_text(tips, chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
 
 
 # ========== ОБРАБОТКА ТЕКСТА И КНОПОК НИЖНЕГО МЕНЮ ==========
@@ -368,33 +397,28 @@ def handle_message(message):
     
     state = user_states[chat_id].get("cg_mode")
 
-    # Вызов главного инлайн-меню через кнопку реплай-клавиатуры
     if text == "🛡️ Меню CyberGuard":
         user_states[chat_id].pop("cg_mode", None)
         bot.send_message(chat_id, "🛡️ CyberGuard Bot\n\nВыбери инструмент безопасности:", reply_markup=cg_keyboard())
         return
 
-    # Проверка режима ожидания пароля (Симулятор взлома)
     if state == 'waiting_for_crack_password':
         user_states[chat_id]["cg_mode"] = None
         simulate_crack_time_local(chat_id, text)
         return
 
-    # Проверка режима детектора фишинга
     if state == "phishing":
         result = cg_check_phishing(text)
         user_states[chat_id].pop("cg_mode", None)
         bot.send_message(chat_id, result, reply_markup=cg_back(), parse_mode='Markdown')
         return
 
-    # Проверка режима проверки ссылок
     if state == "link":
         result = cg_check_link(text)
         user_states[chat_id].pop("cg_mode", None)
         bot.send_message(chat_id, result, reply_markup=cg_back())
         return
 
-    # Обработка нажатий на нижние кнопки реплай-клавиатуры
     if text == '🔑 Генератор паролей':
         chars = string.ascii_letters + string.digits + '!@#$%^&*'
         password = ''.join(random.choice(chars) for _ in range(14))
@@ -443,6 +467,14 @@ def simulate_crack_time_local(chat_id, password):
     bot.send_message(chat_id, f'⏳ **Результаты симулятора взлома:**\n\nВремя подбора брутфорс-ботом: **{time_str}**', parse_mode='Markdown')
 
 
-# Запуск бота с защитой от обрывов связи и веб-сервером для Render
-print('Умный бот CyberGuard успешно запущен в облаке!')
-bot.infinity_polling(skip_pending=True)
+# Установка вебхука при старте приложения
+RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
+if RENDER_URL:
+    webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    print(f"Webhook successfully set to: {webhook_url}")
+else:
+    print("WARNING: RENDER_EXTERNAL_URL not found.")
+
+print('Умный бот CyberGuard успешно запущен на вебхуках!')
