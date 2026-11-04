@@ -178,11 +178,13 @@ def ask_gemini_ai(prompt):
         return "⚠️ Ошибка: API-ключ Gemini не настроен в системе."
     try:
         response = ai_client.models.generate_content(
-            model="gemini-flash-latest",
+            model="gemini-1.5-flash",
             contents=f"Ты CyberGuard — профессиональный ИИ-эксперт по кибербезопасности. Отвечай понятно, коротко и полезно. Вопрос пользователя: {prompt}",
-            )
+        )
         return response.text
     except Exception as e:
+        if "503" in str(e) or "UNAVAILABLE" in str(e):
+            return "⚠️ Серверы Google сейчас перегружены из-за высокого спроса. Пожалуйста, повторите попытку через несколько секунд!"
         return f"⚠️ Ошибка обращения к ИИ: {e}"
 
 # обработка кнопок
