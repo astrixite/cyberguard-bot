@@ -1,7 +1,2 @@
-<<<<<<< HEAD
 pyTelegramBotAPI==4.26.0
 google-genai==1.0.0
-=======
-pyTelegramBotAPI==4.26.0
-google-genai==1.0.0
->>>>>>> 174f1db01cd2ba913d96efb5b73f5d58306acc90
