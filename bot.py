@@ -296,13 +296,19 @@ def handle_message(message):
         bot.send_message(chat_id, "💡 Используй сложные пароли и менеджеры паролей.")
 
 # деплой вебхука
-RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
-if RENDER_URL:
-    bot.remove_webhook()
-    bot.set_webhook(url=f"{RENDER_URL}{WEBHOOK_PATH}")
+# Замени этот финальный блок в твоем bot.py:
 
-print('Бот с Gemini ИИ успешно запущен!')
-
+# деплой вебхука и запуск сервера
 if __name__ == "__main__":
+    RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
+    if RENDER_URL:
+        try:
+            bot.remove_webhook()
+            bot.set_webhook(url=f"{RENDER_URL}{WEBHOOK_PATH}")
+            print(f"Вебхук успешно установлен на: {RENDER_URL}{WEBHOOK_PATH}")
+        except Exception as e:
+            print(f"Ошибка при установке вебхука: {e}")
+
     port = int(os.environ.get("PORT", 10000))
+    print(f'Бот с Gemini ИИ успешно запущен на порту {port}!')
     HTTPServer(("0.0.0.0", port), HealthCheckHandler).serve_forever()
