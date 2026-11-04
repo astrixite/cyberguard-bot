@@ -178,7 +178,7 @@ def ask_gemini_ai(prompt):
         return "⚠️ Ошибка: API-ключ Gemini не настроен в системе."
     try:
         response = ai_client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-flash-latest",
             contents=f"Ты CyberGuard — профессиональный ИИ-эксперт по кибербезопасности. Отвечай понятно, коротко и полезно. Вопрос пользователя: {prompt}",
         )
         return response.text
