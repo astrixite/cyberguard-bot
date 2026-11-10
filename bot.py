@@ -75,6 +75,7 @@ def cg_keyboard():
         [types.InlineKeyboardButton("🔑 Генератор паролей", callback_data="cg:pass_gen")],
         [types.InlineKeyboardButton("⏳ Симулятор взлома", callback_data="cg:crack_sim")],
         [types.InlineKeyboardButton("📖 Словарь киберугроз", callback_data="cg:dict")],
+        [types.InlineKeyboardButton("🔗 Полезные ресурсы", callback_data="cg:tools")], # Добавили кнопку
         [types.InlineKeyboardButton("💡 Советы", callback_data="cg:tips")],
     ])
 
@@ -239,9 +240,9 @@ def cg_callback(call):
         context["cg_mode"] = "waiting_for_crack"
         bot.edit_message_text("⏳ Введи пароль для симулятора взлома:", chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
     elif data == "cg:dict":
-        bot.edit_message_text("📖 Словарь: Фишинг, брутфорс, соц. инженерия.", chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
-    elif data == "cg:tips":
-        bot.edit_message_text("💡 Советы: используй 2FA и разные пароли.", chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
+    bot.send_message(chat_id, "📖 **Словарь киберугроз:**\n\n• **Фишинг** — выманивание данных.\n• **Брутфорс** — подбор паролей перебором.\n• **Социальная инженерия** — психологический взлом.", parse_mode='Markdown', reply_markup=cg_back())
+elif data == "cg:tips":
+    bot.send_message(chat_id, "💡 **Полезные советы:**\n\n1. Используйте сложные уникальные пароли.\n2. Везде включайте двухфакторную аутентификацию (2FA).\n3. Не переходите по подозрительным ссылкам.", parse_mode='Markdown', reply_markup=cg_back())
 
 # обработка текста
 @bot.message_handler(func=lambda message: True)
