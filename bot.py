@@ -75,7 +75,7 @@ def cg_keyboard():
         [types.InlineKeyboardButton("🔑 Генератор паролей", callback_data="cg:pass_gen")],
         [types.InlineKeyboardButton("⏳ Симулятор взлома", callback_data="cg:crack_sim")],
         [types.InlineKeyboardButton("📖 Словарь киберугроз", callback_data="cg:dict")],
-        [types.InlineKeyboardButton("🔗 Полезные ресурсы", callback_data="cg:tools")], # Добавили кнопку
+        [types.InlineKeyboardButton("🔗 Полезные ресурсы", callback_data="cg:tools")],
         [types.InlineKeyboardButton("💡 Советы", callback_data="cg:tips")],
     ])
 
@@ -127,10 +127,13 @@ def cg_check_phishing(message_text):
         result += "\nОбнаружено:\n" + "\n".join(f"• {item}" for item in findings)
     return result
 
-# квиз
+# квиз (расширенный список вопросов)
 CG_QUIZ = [
     ("Какой пароль безопаснее?", ["12345678", "Qwerty123", "Случайный уникальный пароль"], 2, "Уникальный пароль надежнее."),
     ("Что такое фишинг?", ["Вид антивируса", "Обман для получения данных", "Обновление системы"], 1, "Фишинг — это обман."),
+    ("Что из этого защищает лучше всего от взлома аккаунта?", ["Смена пароля раз в год", "Двухфакторная аутентификация (2FA)", "Сложный пароль в заметках телефона"], 1, "2FA добавляет второй уровень защиты."),
+    ("Безопасно ли использовать один и тот же пароль для всех сайтов?", ["Да, если он сложный", "Нет, при взломе одного сайта пострадают все", "Да, если менять раз в месяц"], 1, "Уникальность паролей — залог безопасности."),
+    ("Что делать, если пришло подозрительное письмо от банка с требованием срочно перейти по ссылке?", ["Сразу перейти и проверить", "Проигнорировать или связаться с банком официально", "Переслать другу"], 1, "Никогда не переходите по подозрительным ссылкам из писем.")
 ]
 
 def cg_show_quiz_sync(message, context, feedback=""):
@@ -141,7 +144,7 @@ def cg_show_quiz_sync(message, context, feedback=""):
         return
     question, options, _, _ = CG_QUIZ[index]
     keyboard = [[types.InlineKeyboardButton(opt, callback_data=f"cg:q:{i}")] for i, opt in enumerate(options)]
-    bot.edit_message_text(f"{feedback}🧠 Вопрос {index + 1}:\n\n{question}", chat_id=message.chat.id, message_id=message.message_id, reply_markup=types.InlineKeyboardMarkup(keyboard))
+    bot.edit_message_text(f"{feedback}🧠 Вопрос {index + 1} из {len(CG_QUIZ)}:\n\n{question}", chat_id=message.chat.id, message_id=message.message_id, reply_markup=types.InlineKeyboardMarkup(keyboard))
 
 # помощь при взломе
 CG_RECOVERY = {
@@ -240,9 +243,11 @@ def cg_callback(call):
         context["cg_mode"] = "waiting_for_crack"
         bot.edit_message_text("⏳ Введи пароль для симулятора взлома:", chat_id=chat_id, message_id=call.message.message_id, reply_markup=cg_back())
     elif data == "cg:dict":
-    bot.send_message(chat_id, "📖 **Словарь киберугроз:**\n\n• **Фишинг** — выманивание данных.\n• **Брутфорс** — подбор паролей перебором.\n• **Социальная инженерия** — психологический взлом.", parse_mode='Markdown', reply_markup=cg_back())
-elif data == "cg:tips":
-    bot.send_message(chat_id, "💡 **Полезные советы:**\n\n1. Используйте сложные уникальные пароли.\n2. Везде включайте двухфакторную аутентификацию (2FA).\n3. Не переходите по подозрительным ссылкам.", parse_mode='Markdown', reply_markup=cg_back())
+        bot.edit_message_text("📖 **Словарь киберугроз:**\n\n• **Фишинг** — выманивание данных.\n• **Брутфорс** — подбор паролей перебором.\n• **Социальная инженерия** — психологический взлом.", chat_id=chat_id, message_id=call.message.message_id, parse_mode='Markdown', reply_markup=cg_back())
+    elif data == "cg:tools":
+        bot.edit_message_text("🔗 **Полезные ресурсы:**\n\n• [Safe Browsing](https://transparencyreport.google.com/safe-browsing/search)\n• [Have I Been Pwned](https://haveibeenpwned.com/)", chat_id=chat_id, message_id=call.message.message_id, parse_mode='Markdown', reply_markup=cg_back())
+    elif data == "cg:tips":
+        bot.edit_message_text("💡 **Полезные советы:**\n\n1. Используйте сложные уникальные пароли.\n2. Везде включайте двухфакторную аутентификацию (2FA).\n3. Не переходите по подозрительным ссылкам.", chat_id=chat_id, message_id=call.message.message_id, parse_mode='Markdown', reply_markup=cg_back())
 
 # обработка текста
 @bot.message_handler(func=lambda message: True)
@@ -297,9 +302,6 @@ def handle_message(message):
         bot.send_message(chat_id, f"📊 Вопрос 1:\n\n{CG_AUDIT[0]}", reply_markup=markup)
     elif text == '💡 Советы':
         bot.send_message(chat_id, "💡 Используй сложные пароли и менеджеры паролей.")
-
-# деплой вебхука
-# Замени этот финальный блок в твоем bot.py:
 
 # деплой вебхука и запуск сервера
 if __name__ == "__main__":
